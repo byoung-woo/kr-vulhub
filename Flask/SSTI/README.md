@@ -1,37 +1,111 @@
-# Flask (Jinja2) SSTI (Server Side Template Injection)
+# CVE-Flask-SSTI PoC 보고서
 
-> 화이트햇 스쿨 1기 - [신경방 (@positiveWand)](https://github.com/positiveWand)
+**작성자**: 박병우 32반반  
+**Fork URL**: https://github.com/byoung-woo/kr-vulhub  
+**원본 레포**: https://github.com/gunh0/kr-vulhub
 
-<br/>
+---
 
-## 요약
+## 1. 개요
+- **취약 대상**: Flask 2.x  
+- **취약 유형**: Server-Side Template Injection (SSTI)  
+- **요약**:  
+  템플릿 엔진(Jinja2)에 사용자 입력을 그대로 전달하면, 템플릿 구문({{ ... }})이 서버에서 파이썬 코드로 평가됩니다. 그 결과 공격자는 계산식 실행(예: 7*7), 환경 변수 열람, 시스템 명령 실행까지 단계적으로 악용할 수 있습니다. 따라서 SSTI는 정보 노출에서 원격 코드 실행(RCE)로까지 확대될 수 있는 치명적 취약점입니다.
 
-- 서버 탬플릿 엔진은 사용자로부터 요청이 들어올때마다 작성된 템플릿 파일을 렌더링하고 그 결과를 사용자에게 반환한다.
-- 서버는 서버에 저장된 데이터, 사용자 요청과 함께 전달받은 데이터 등과 같이 서버에서 사용가능한 데이터들을 이용해 렌더링을 수행한다.
-- 이 취약점은 Flask와 Flask에서 사용하는 템플릿 엔진 "Jinja2"를 사용할 때 발생. 사용자가 잘 구성한 렌더링 코드 문자열을 서버에 전달하고 서버가 이 문자열을 그대로 템플릿 엔진에 삽입하여 렌더링을 수행한다면 사용자가 전달한 임의의 Python 코드가 실행될 수 있다.
 
-<br/>
 
-## 환경 구성 및 실행
+---
 
-1. `docker compose up -d` 를 실행하여 테스트 환경을 실행.
-2. `http://your-ip:8000/?name={{233*233}}`에 접속하여 54289가 출력되는지 확인하여 SSTI 취약점이 존재함을 확인합니다.
-3. `python poc.py`를 실행하여 공격을 수행하는 URL을 확인.
-4. 해당 URL에 접속하면 삽입한 코드가 실행되어 서버 프로세스의 id가 출력되는 것을 확인할 수 있음.
+## 2. 환경 구성 및 PoC 
 
-+) `poc.py`의 `script` 변수의 값을 원하는 Python 코드로 바꾸면 해당 코드가 서버에서 실행된다.
-(기본 코드는 서버 프로세스의 id를 출력하는 코드)
+### 2.1. 로컬 환경
+- **OS**: Windows 11  
+- **Docker 버전**: 20.10.x  
+- **Docker Compose 버전**: 1.29.x  
 
-<br/>
+### 2.2. 디렉터리 구조
+```bash
+Flask/SSTI
+├─ app.py
+├─ Dockerfile
+├─ docker-compose.yml
+├─ README.md       ← 이 파일
+└─ screenshots/
+   ├─ 01_build.png      # 빌드 & 실행 로그
+   ├─ 02_browser.png    # 기본 페이지
+   ├─ 03_ssti.png       # PoC(7*7=49)
+   └─ 04_down.png       # 종료 확인
+```
 
-## 결과
+### 2.3. 실행 순서
+1. **PoC 환경 클론 및 디렉터리 이동**  
+   ```bash
+   git clone https://github.com/byoung-woo/kr-vulhub.git
+   cd kr-vulhub/Flask/SSTI
+   ```
 
-![poc 실행 이미지](./1.png)
+2. **Docker 이미지 빌드 및 컨테이너 실행**  
+   ```bash
+   # Docker 2.x 이상
+   docker compose up --build -d
 
-![서버로부터 받은 반환값](./2.png)
+   # 구버전
+   docker-compose up --build -d
+   ```
 
-<br/>
+3. **컨테이너 상태 확인**  
+   ```bash
+   docker compose ps
+   ```
 
-## 정리
+4. **브라우저 접속 및 SSTI 테스트**  
+   ```text
+   http://localhost:8000/?name={{7*7}}
+   ```
 
-- 이 취약점은 사용자가 서버에서 임의의 코드를 실행하도록 할 수 있게 만들기 때문에 위험하다. 안전한 웹 서비스 운영을 위해서는 서버 개발자가 혹은 라이브러리, 프레임워크에서 사용자가 전달한 데이터가 템플릿 코드인지 확인하여 필터링하거나 사용자 입력 데이터가 실행으로 이어지지 않도록 해야한다.
+5. **컨테이너 종료**  
+   ```bash
+   docker compose down
+   ```
+
+### 2.4. PoC 시연 스크린샷
+1. **빌드 & 시작 로그**  
+   ![1. 빌드 성공 화면](./screenshots/01_build.png)
+
+2. **기본 페이지 로드**  
+   ![2. 기본 페이지 로드](./screenshots/02_browser.png)
+
+3. **SSTI PoC 결과 (7×7)**  
+   ![3. SSTI PoC 결과](./screenshots/03_ssti.png)
+
+4. **컨테이너 종료 확인**  
+   ![4. 컨테이너 종료](./screenshots/04_down.png)
+
+---
+
+## 3. GitHub 연동 & 커밋 (40%)
+
+- **Fork URL**: https://github.com/byoung-woo/kr-vulhub  
+- **주요 커밋 내역**:  
+  - `2025-04-27  SSTI PoC 환경 추가 (Dockerfile, docker-compose.yml)`  
+  - `2025-04-27  README.md 작성 및 스크린샷 추가`
+
+---
+
+## 4. 결론 및 향후 과제
+
+- **결론**:  
+  Docker만으로 Flask SSTI 취약점을 PoC 하였으며, 성공적으로 `7×7=49`를 출력함을 확인했습니다.
+
+- **향후 개선점**:  
+  - PoC 자동화 스크립트(`poc.sh`) 추가  
+  - CI 환경에서 자동 빌드/테스트 설정  
+  - 다른 CVE 환경(Express, Next.js 등)으로 확장
+
+---
+
+## 부록
+
+- **참고문헌·링크**  
+  - https://github.com/gunh0/kr-vulhub  
+  - https://vulhub.org/
